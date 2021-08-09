@@ -1,152 +1,73 @@
-import 'dart:async';
+import 'dart:io';
 
-import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
-
-import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite/sqlite_api.dart';
+import 'package:path/path.dart';
+import 'package:todo_db/models/task_model.dart';
 
-void main() async {
-
-  WidgetsFlutterBinding.ensureInitialized();
-
-  final database = openDatabase(
-
-    join(await getDatabasesPath(), 'my_database.db'),
-
-    onCreate: (db, version) {
-
-      return db.execute(
-        'CREATE TABLE fatima(id INTEGER PRIMARY KEY, description TEXT, DateTime date,TimeOfDay date,isDone INTEGER)',
-
-      );
-    },
-
-    version: 1,
-  );
-
-
-  Future<void> insertTask(Task task) async {
-    final db = await database;
-    await db.insert(
-      'fatima',
-      task.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+class DbHelper {
+  DbHelper._();
+  static DbHelper dbHelper = DbHelper._();
+  static final String dbName = 'tasks.db';
+  static final String tableName = 'tasks';
+  static final String idColumn = 'id';
+  static final String taskNameColumn = 'taskName';
+  static final String taskIsCompleteColumn = 'isComplete';
+  static final String taskDateColumn = 'dueDate';
+  static final String taskIsTimeColumn = 'dueTime';
+  Database database;
+  initDatabase() async {
+    database = await createConnection();
   }
 
+  Future<Database> createConnection() async {
+    Directory directory = await getApplicationDocumentsDirectory();
 
-  Future<List<Task>> fatima() async {
-
-    final db = await database;
-
-
-    final List<Map<String, dynamic>> maps = await db.query('fatima');
-
-
-    return List.generate(maps.length, (i) {
-      return Task(
-        id: maps[i]['id'],
-        dueDate: maps[i]['dueDate'],
-        dueTime: maps[i]['dueTime'],
-        isDone: maps[i]['isDone'],
-
-      );
-    });
+    Database database = await openDatabase(join(directory.path, dbName),
+        version: 1, onCreate: (db, version) {
+          db.execute(
+              '''CREATE TABLE $tableName ($idColumn INTEGER PRIMARY KEY AUTOINCREMENT, $taskNameColumn TEXT, $taskIsCompleteColumn INTEGER, $taskDateColumn TEXT , $taskIsTimeColumn Text )''');
+        });
+    return database;
   }
 
-  Future<void> updateTask(Task task) async {
-
-    final db = await database;
-
-
-    await db.update(
-      'fatima',
-      task.toMap(),
-
-      where: 'id = ?',
-
-      whereArgs: [task.id],
-    );
+  Future<int> createNewTask(TaskModel taskModel) async {
+    try {
+      int x = await database.insert(tableName, taskModel.toMap());
+      return x;
+    } on Exception catch (e) {
+      return null;
+    }
   }
 
-  Future<void> deleteTask(int id) async {
-
-    final db = await database;
-
-
-    await db.delete(
-      'fatima',
-
-      where: 'id = ?',
-
-      whereArgs: [id],
-    );
-  }
- var task1 = Task(
-    id:0,
-    description: 'do english home work',
-    dueDate: DateTime.utc(2021, 8, 9),
-    dueTime: TimeOfDay(hour: 15, minute: 0),
-    isDone: true,
-  );
-
-  await insertTask(task1);
-
-
-  print(await fatima()); // Prints a list that include Fido.
-
-
-  task1 = Task(
-    id:0,
-    description: 'do english home work',
-    dueDate: DateTime.utc(2021, 8, 9),
-    dueTime: TimeOfDay(hour: 15, minute: 0),
-    isDone: true,
-  );
-  await updateTask(task1);
-
-
-  print(await fatima());
-
-
-  await deleteTask(task1.id);
-
-
-  print(await fatima());
-}
-
-
-
-
-
-
-class Task {
-  final int id;
-  String description;
-  DateTime dueDate;
-  TimeOfDay dueTime;
-  bool isDone;
-
-  Task({
-    @required this.id,
-    @required this.description,
-    this.dueDate,
-    this.dueTime,
-    this.isDone = false,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'description': description,
-      'dueDate': dueDate,
-      'dueTime': dueTime,
-      'isDone' : isDone,
-    };
+  Future<List<TaskModel>> getAllTasks() async {
+    try {
+      List<Map<String, dynamic>> results = await database.query(tableName);
+      List<TaskModel> tasks = results.map((e) => TaskModel.fromMap(e)).toList();
+      return tasks;
+    } on Exception catch (e) {
+      return null;
+    }
   }
 
-  String toString() {
-    return 'Task{id: $id, description: $description, dueDate: $dueDate,}';
+  Future<bool> updateTask(TaskModel taskModel) async {
+    try {
+      await database.update(tableName, taskModel.toMap(),
+          where: '$idColumn=?', whereArgs: [taskModel.id]);
+      return true;
+    } on Exception catch (e) {
+      return null;
+    }
+  }
+
+  deleteTask(TaskModel taskModel) async {
+    try {
+      await database
+          .delete(tableName, where: '$idColumn=?', whereArgs: [taskModel.id]);
+      return true;
+    } on Exception catch (e) {
+      return null;
+    }
   }
 }
